@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>اشرف اسٹور - آن لائن شاپنگ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js"></script>
+    
+    <style>
+        body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto; background: #f8fafc; padding-bottom: 70px; }
+        .bottom-nav { backdrop-filter: blur(10px); background: rgba(255,255,255,0.95); }
+        .product-card { transition: all 0.2s ease; background: white; border-radius: 1rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .product-card:active { transform: scale(0.98); }
+        .toast-message { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .skeleton { background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; border-radius: 1rem; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .category-btn { background: white; color: #4b5563; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .category-btn.active { background: #3b82f6; color: white; }
+        .product-image { width: 100%; height: 180px; object-fit: cover; }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="sticky top-0 z-50 bg-white shadow-md">
+    <div class="px-4 py-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-store text-2xl text-blue-600"></i>
+                <h1 class="text-xl font-bold">اشرف اسٹور</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <div id="userAvatar" class="hidden">
+                    <img id="avatarImg" class="w-8 h-8 rounded-full border-2 border-blue-500">
+                </div>
+                <button onclick="toggleAuth()" id="authBtn">
+                    <i class="fas fa-user-circle text-2xl text-gray-600"></i>
+                </button>
+                <button onclick="openCart()" class="relative">
+                    <i class="fas fa-shopping-cart text-2xl text-gray-600"></i>
+                    <span id="cartBadge" class="absolute -top-1 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                </button>
+                <a href="admin.html" class="text-gray-600">
+                    <i class="fas fa-user-shield text-2xl"></i>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Search -->
+        <div class="mt-3">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                <input type="text" id="searchInput" placeholder="پروڈکٹ تلاش کریں..." class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:border-blue-500">
+            </div>
+            <div id="searchResults" class="absolute left-0 right-0 mt-1 bg-white shadow-xl rounded-xl z-50 hidden max-h-96 overflow-auto"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Categories -->
+<div class="px-4 py-3 overflow-x-auto">
+    <div id="categories" class="flex gap-3">
+        <button onclick="filterProducts('all')" class="category-btn active px-4 py-2 rounded-full text-sm">سب</button>
+        <button onclick="filterProducts('groceries')" class="category-btn px-4 py-2 rounded-full text-sm">گروسری</button>
+        <button onclick="filterProducts('electronics')" class="category-btn px-4 py-2 rounded-full text-sm">الیکٹرونکس</button>
+        <button onclick="filterProducts('clothing')" class="category-btn px-4 py-2 rounded-full text-sm">کپڑے</button>
+        <button onclick="filterProducts('home')" class="category-btn px-4 py-2 rounded-full text-sm">گھر کا سامان</button>
+    </div>
+</div>
+
+<!-- Banner -->
+<div class="px-4 mb-5">
+    <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-5 text-white">
+        <h2 class="text-2xl font-bold">🔥 بڑی چھوٹ</h2>
+        <p class="text-sm mb-3">50% تک کی چھوٹ منتخب آئٹمز پر</p>
+        <button onclick="document.getElementById('products').scrollIntoView({behavior:'smooth'})" class="bg-white text-blue-600 px-5 py-2 rounded-full text-sm font-semibold">ابھی خریدیں</button>
+    </div>
+</div>
+
+<!-- Products -->
+<div id="products" class="px-4 mb-24">
+    <h2 class="text-lg font-bold mb-4">✨ نمایاں مصنوعات</h2>
+    <div id="productsGrid" class="grid grid-cols-2 gap-4">
+        <div class="skeleton h-64"></div>
+        <div class="skeleton h-64"></div>
+        <div class="skeleton h-64"></div>
+        <div class="skeleton h-64"></div>
+    </div>
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 left-0 right-0 bg-white/95 border-t bottom-nav">
+    <div class="flex justify-around py-2">
+        <button onclick="showHome()" id="navHome" class="flex flex-col items-center text-blue-600"><i class="fas fa-home text-xl"></i><span class="text-xs">ہوم</span></button>
+        <button onclick="showShop()" id="navShop" class="flex flex-col items-center text-gray-500"><i class="fas fa-search text-xl"></i><span class="text-xs">تلاش</span></button>
+        <button onclick="showOrders()" id="navOrders" class="flex flex-col items-center text-gray-500"><i class="fas fa-list text-xl"></i><span class="text-xs">آرڈرز</span></button>
+        <button onclick="showProfile()" id="navProfile" class="flex flex-col items-center text-gray-500"><i class="fas fa-user text-xl"></i><span class="text-xs">پروفائل</span></button>
+    </div>
+</nav>
+
+<!-- Cart Drawer -->
+<div id="cartDrawer" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeCart()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[80vh] overflow-auto">
+        <div class="sticky top-0 bg-white p-4 border-b flex justify-between">
+            <h3 class="font-bold">میری کارٹ <span id="cartItemCount">(0)</span></h3>
+            <button onclick="closeCart()"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="cartItems" class="p-4"></div>
+        <div id="cartFooter" class="p-4 border-t hidden">
+            <div class="flex justify-between mb-3"><span>کل:</span><span id="cartTotal" class="font-bold text-blue-600">₹0</span></div>
+            <button onclick="checkout()" class="w-full bg-blue-600 text-white py-3 rounded-xl">آرڈر کریں</button>
+        </div>
+    </div>
+</div>
+
+<!-- Checkout Modal -->
+<div id="checkoutModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeCheckout()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-4">
+        <h3 class="font-bold mb-4">آرڈر کی تفصیلات</h3>
+        <textarea id="address" rows="3" placeholder="اپنا مکمل پتہ لکھیں" class="w-full border rounded-xl p-3 mb-3"></textarea>
+        <button onclick="placeOrder()" class="w-full bg-green-600 text-white py-3 rounded-xl">آرڈر کنفرم کریں</button>
+        <button onclick="closeCheckout()" class="w-full text-gray-500 py-2 mt-2">منسوخ</button>
+    </div>
+</div>
+
+<!-- Login Modal -->
+<div id="loginModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" onclick="closeLogin()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl p-6">
+        <h2 class="text-xl font-bold text-center mb-4">لاگ ان کریں</h2>
+        <button onclick="loginWithGoogle()" class="w-full bg-red-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 mb-3"><i class="fab fa-google"></i> گوگل سے لاگ ان</button>
+        <div class="relative my-4"><div class="absolute inset-0 flex items-center"><div class="w-full border-t"></div></div><div class="relative flex justify-center text-sm"><span class="px-2 bg-white text-gray-500">یا ای میل سے</span></div></div>
+        <input type="email" id="loginEmail" placeholder="ای میل" class="w-full border rounded-xl p-3 mb-3">
+        <input type="password" id="loginPassword" placeholder="پاس ورڈ" class="w-full border rounded-xl p-3 mb-4">
+        <button onclick="loginWithEmail()" class="w-full bg-blue-600 text-white py-3 rounded-xl">لاگ ان</button>
+        <button onclick="closeLogin()" class="w-full text-gray-500 py-2 mt-2">منسوخ</button>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toastContainer" class="fixed top-20 right-4 left-4 z-50 flex flex-col items-end gap-2"></div>
+
+<script>
+// ============ FIREBASE CONFIG (آپ کی دی ہوئی) ============
+const firebaseConfig = {
+    apiKey: "AIzaSyDeonBkHpaKn84kG-7jQN3vXV5vV7g1dUY",
+    authDomain: "sharifcom-45d95.firebaseapp.com",
+    databaseURL: "https://sharifcom-45d95-default-rtdb.firebaseio.com",
+    projectId: "sharifcom-45d95",
+    storageBucket: "sharifcom-45d95.firebasestorage.app",
+    messagingSenderId: "273914972899",
+    appId: "1:273914972899:web:040c90d0e6b38ee864d3d6"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+// ============ GLOBAL VARIABLES ============
+let currentUser = null;
+let cart = {};
+let products = [];
+let currentFilter = 'all';
+
+// ============ AUTHENTICATION ============
+auth.onAuthStateChanged((user) => {
+    currentUser = user;
+    if (user) {
+        document.getElementById('userAvatar').classList.remove('hidden');
+        document.getElementById('avatarImg').src = user.photoURL || 'https://ui-avatars.com/api/?background=3b82f6&color=fff&name=' + (user.displayName || 'User');
+        document.getElementById('authBtn').innerHTML = '<i class="fas fa-sign-out-alt text-2xl text-gray-600"></i>';
+        loadUserCart();
+    } else {
+        document.getElementById('userAvatar').classList.add('hidden');
+        document.getElementById('authBtn').innerHTML = '<i class="fas fa-user-circle text-2xl text-gray-600"></i>';
+        loadGuestCart();
+    }
+    updateCartBadge();
+});
+
+function toggleAuth() {
+    if (currentUser) {
+        auth.signOut().then(() => {
+            showToast('لاگ آؤٹ ہو گئے');
+            location.reload();
+        });
+    } else {
+        openLogin();
+    }
+}
+
+function loginWithGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider)
+        .then(() => { closeLogin(); showToast('خوش آمدید!'); })
+        .catch(e => showToast(e.message, 'error'));
+}
+
+function loginWithEmail() {
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    auth.signInWithEmailAndPassword(email, password)
+        .then(() => { closeLogin(); showToast('لاگ ان کامیاب'); })
+        .catch(() => showToast('غلط ای میل یا پاس ورڈ', 'error'));
+}
+
+function openLogin() { document.getElementById('loginModal').classList.remove('hidden'); }
+function closeLogin() { document.getElementById('loginModal').classList.add('hidden'); }
+
+// ============ PRODUCTS FROM FIREBASE ============
+function loadProducts() {
+    db.ref('products').on('value', (snapshot) => {
+        products = [];
+        snapshot.forEach((child) => {
+            products.push({ id: child.key, ...child.val() });
+        });
+        displayProducts();
+    });
+}
+
+function displayProducts() {
+    const grid = document.getElementById('productsGrid');
+    if (!grid) return;
+    
+    let filtered = products;
+    if (currentFilter !== 'all') {
+        filtered = products.filter(p => p.category === currentFilter);
+    }
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="col-span-2 text-center py-10 text-gray-400">کوئی پروڈکٹ نہیں</div>';
+        return;
+    }
+    
+    grid.innerHTML = filtered.map(product => `
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden product-card">
+            <div class="relative">
+                <img src="${product.image || 'https://via.placeholder.com/300'}" alt="${product.name}" class="w-full h-40 object-cover" loading="lazy">
+                ${product.discount && product.discount < product.price ? `
+                    <span class="absolute top-2 left-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                        ${Math.round(((product.price - product.discount) / product.price) * 100)}% OFF
+                    </span>
+                ` : ''}
+                <button onclick="addToCart('${product.id}')" class="absolute bottom-2 right-2 bg-blue-600 text-white p-2 rounded-full shadow-lg">
+                    <i class="fas fa-cart-plus text-sm"></i>
+                </button>
+            </div>
+            <div class="p-3">
+                <h3 class="font-semibold text-sm mb-1">${product.name}</h3>
+                <div class="flex items-center gap-1 mb-2">
+                    <div class="flex text-yellow-400 text-xs">
+                        ${renderStars(product.rating || 4)}
+                    </div>
+                    <span class="text-xs text-gray-400">(${product.reviews || 0})</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-base font-bold text-blue-600">₹${product.discount || product.price}</span>
+                        ${product.discount ? `<span class="text-xs text-gray-400 line-through ml-1">₹${product.price}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderStars(rating) {
+    let stars = '';
+    for (let i = 1; i <= 5; i++) {
+        stars += `<i class="fas fa-star${i <= Math.floor(rating) ? '' : '-o'}"></i>`;
+    }
+    return stars;
+}
+
+function filterProducts(category) {
+    currentFilter = category;
+    displayProducts();
+    
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.classList.remove('active', 'bg-blue-600', 'text-white');
+        btn.classList.add('bg-white', 'text-gray-600');
+    });
+    if (event && event.target) {
+        event.target.classList.add('active', 'bg-blue-600', 'text-white');
+        event.target.classList.remove('bg-white', 'text-gray-600');
+    }
+}
+
+// ============ CART FUNCTIONS ============
+function loadUserCart() {
+    if (!currentUser) return;
+    db.ref(`carts/${currentUser.uid}`).on('value', (snapshot) => {
+        cart = {};
+        snapshot.forEach((child) => {
+            cart[child.key] = child.val();
+        });
+        updateCartBadge();
+        renderCart();
+    });
+}
+
+function loadGuestCart() {
+    const saved = localStorage.getItem('cart');
+    cart = saved ? JSON.parse(saved) : {};
+    updateCartBadge();
+}
+
+function saveGuestCart() {
+    localStorage.setItem('cart', JSON.stringify(cart));
+}
+
+function addToCart(productId) {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    
+    if (cart[productId]) {
+        cart[productId].quantity++;
+    } else {
+        cart[productId] = {
+            id: productId,
+            name: product.name,
+            price: product.discount || product.price,
+            quantity: 1,
+            image: product.image || 'https://via.placeholder.com/60'
+        };
+    }
+    
+    if (currentUser) {
+        db.ref(`carts/${currentUser.uid}/${productId}`).set(cart[productId]);
+    } else {
+        saveGuestCart();
+    }
+    
+    updateCartBadge();
+    showToast(`${product.name} کارٹ میں شامل!`);
+}
+
+function removeFromCart(productId) {
+    delete cart[productId];
+    if (currentUser) {
+        db.ref(`carts/${currentUser.uid}/${productId}`).remove();
+    } else {
+        saveGuestCart();
+    }
+    updateCartBadge();
+    renderCart();
+}
+
+function updateQuantity(productId, change) {
+    if (cart[productId]) {
+        const newQty = cart[productId].quantity + change;
+        if (newQty <= 0) {
+            removeFromCart(productId);
+        } else {
+            cart[productId].quantity = newQty;
+            if (currentUser) {
+                db.ref(`carts/${currentUser.uid}/${productId}`).set(cart[productId]);
+            } else {
+                saveGuestCart();
+            }
+            renderCart();
+        }
+    }
+}
+
+function updateCartBadge() {
+    const count = Object.keys(cart).length;
+    document.getElementById('cartBadge').innerText = count;
+}
+
+function renderCart() {
+    const container = document.getElementById('cartItems');
+    const items = Object.values(cart);
+    
+    if (items.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-shopping-cart text-4xl mb-2"></i><p>کارٹ خالی ہے</p></div>';
+        document.getElementById('cartFooter').classList.add('hidden');
+        return;
+    }
+    
+    let total = 0;
+    container.innerHTML = items.map(item => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+        return `
+            <div class="flex gap-3 mb-4 pb-4 border-b">
+                <img src="${item.image}" class="w-16 h-16 rounded-lg object-cover">
+                <div class="flex-1">
+                    <h4 class="font-semibold text-sm">${item.name}</h4>
+                    <p class="text-blue-600 font-bold mt-1">₹${item.price}</p>
+                    <div class="flex items-center gap-3 mt-2">
+                        <button onclick="updateQuantity('${item.id}', -1)" class="w-7 h-7 rounded-full bg-gray-100">-</button>
+                        <span class="w-8 text-center">${item.quantity}</span>
+                        <button onclick="updateQuantity('${item.id}', 1)" class="w-7 h-7 rounded-full bg-gray-100">+</button>
+                        <button onclick="removeFromCart('${item.id}')" class="text-red-500 ml-auto"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+                <div class="text-right"><p class="font-bold">₹${itemTotal}</p></div>
+            </div>
+        `;
+    }).join('');
+    
+    document.getElementById('cartTotal').innerHTML = `₹${total}`;
+    document.getElementById('cartItemCount').innerHTML = `(${items.length})`;
+    document.getElementById('cartFooter').classList.remove('hidden');
+}
+
+function openCart() { renderCart(); document.getElementById('cartDrawer').classList.remove('hidden'); }
+function closeCart() { document.getElementById('cartDrawer').classList.add('hidden'); }
+
+// ============ ORDER FUNCTIONS ============
+function checkout() {
+    if (!currentUser) {
+        openLogin();
+        showToast('آرڈر کے لیے لاگ ان کریں', 'error');
+        return;
+    }
+    if (Object.keys(cart).length === 0) {
+        showToast('کارٹ خالی ہے', 'error');
+        return;
+    }
+    closeCart();
+    document.getElementById('checkoutModal').classList.remove('hidden');
+}
+
+function closeCheckout() { document.getElementById('checkoutModal').classList.add('hidden'); }
+
+function placeOrder() {
+    const address = document.getElementById('address').value;
+    if (!address) {
+        showToast('پتہ لکھیں', 'error');
+        return;
+    }
+    
+    let total = 0;
+    const items = Object.values(cart);
+    items.forEach(i => total += i.price * i.quantity);
+    total += 50; // delivery charge
+    
+    const orderId = 'ORD' + Date.now() + Math.floor(Math.random() * 1000);
+    const orderData = {
+        orderId: orderId,
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email,
+        userEmail: currentUser.email,
+        items: items,
+        subtotal: total - 50,
+        deliveryCharge: 50,
+        total: total,
+        address: address,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+    };
+    
+    // Save to Firebase
+    db.ref(`orders/${currentUser.uid}/${orderId}`).set(orderData).then(() => {
+        // Clear cart
+        db.ref(`carts/${currentUser.uid}`).remove();
+        cart = {};
+        updateCartBadge();
+        closeCheckout();
+        showToast('آرڈر ہو گیا! 📦');
+        
+        setTimeout(() => {
+            alert(`آپ کا آرڈر کامیاب ہو گیا!\nآرڈر نمبر: ${orderId}\nکل رقم: ₹${total}\nجلد آپ سے رابطہ کیا جائے گا۔`);
+            showOrders();
+        }, 500);
+    }).catch((error) => {
+        showToast('آرڈر میں خرابی: ' + error.message, 'error');
+    });
+}
+
+// ============ SEARCH ============
+function setupSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    
+    searchInput.addEventListener('input', debounce(() => {
+        const query = searchInput.value.toLowerCase().trim();
+        
+        if (query.length < 2) {
+            searchResults.classList.add('hidden');
+            return;
+        }
+        
+        const filtered = products.filter(p => p.name.toLowerCase().includes(query));
+        
+        if (filtered.length > 0) {
+            searchResults.innerHTML = filtered.slice(0, 8).map(p => `
+                <div onclick="addToCart('${p.id}')" class="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b">
+                    <img src="${p.image || 'https://via.placeholder.com/40'}" class="w-10 h-10 rounded object-cover">
+                    <div>
+                        <div class="font-semibold text-sm">${p.name}</div>
+                        <div class="text-blue-600 text-sm">₹${p.discount || p.price}</div>
+                    </div>
+                </div>
+            `).join('');
+            searchResults.classList.remove('hidden');
+        } else {
+            searchResults.innerHTML = '<div class="p-3 text-center text-gray-400">کوئی پروڈکٹ نہیں</div>';
+            searchResults.classList.remove('hidden');
+        }
+    }, 300));
+    
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.classList.add('hidden');
+        }
+    });
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+// ============ UI FUNCTIONS ============
+function showHome() { filterProducts('all'); updateNav('navHome'); window.scrollTo(0,0); }
+function showShop() { filterProducts('all'); updateNav('navShop'); }
+function showOrders() { 
+    if (!currentUser) { openLogin(); return; }
+    db.ref(`orders/${currentUser.uid}`).once('value', (snapshot) => {
+        let ordersHtml = '<div class="bg-white rounded-xl p-4"><h3 class="font-bold mb-3">میرے آرڈرز</h3>';
+        let hasOrders = false;
+        snapshot.forEach((child) => {
+            hasOrders = true;
+            const order = child.val();
+            ordersHtml += `
+                <div class="border rounded-xl p-3 mb-3">
+                    <div class="flex justify-between"><span class="font-bold">آرڈر #${order.orderId}</span><span class="text-sm ${order.status === 'pending' ? 'text-yellow-600' : 'text-green-600'}">${order.status === 'pending' ? 'زیر التواء' : 'مکمل'}</span></div>
+                    <div class="text-sm text-gray-500">${new Date(order.createdAt).toLocaleString()}</div>
+                    <div class="mt-2">${order.items.map(i => `<div class="flex justify-between text-sm"><span>${i.name} x${i.quantity}</span><span>₹${i.price * i.quantity}</span></div>`).join('')}</div>
+                    <div class="flex justify-between mt-2 pt-2 border-t"><span class="font-bold">کل:</span><span class="font-bold text-blue-600">₹${order.total}</span></div>
+                </div>
+            `;
+        });
+        ordersHtml += '</div>';
+        if (!hasOrders) ordersHtml = '<div class="bg-white rounded-xl p-8 text-center text-gray-400"><i class="fas fa-box-open text-4xl mb-2"></i><p>کوئی آرڈر نہیں</p></div>';
+        document.getElementById('productsGrid').innerHTML = ordersHtml;
+    });
+    updateNav('navOrders');
+}
+
+function showProfile() { 
+    if (currentUser) {
+        showToast(`${currentUser.displayName || currentUser.email}`, 'success');
+    } else {
+        openLogin();
+    }
+    updateNav('navProfile');
+}
+
+function updateNav(active) {
+    const navs = ['navHome', 'navShop', 'navOrders', 'navProfile'];
+    navs.forEach(id => {
+        const el = document.getElementById(id);
+        if (id === active) {
+            el.classList.add('text-blue-600');
+            el.classList.remove('text-gray-500');
+        } else {
+            el.classList.add('text-gray-500');
+            el.classList.remove('text-blue-600');
+        }
+    });
+}
+
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `px-4 py-3 rounded-xl shadow-lg toast-message mb-2 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white`;
+    toast.innerText = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// ============ INITIALIZE ============
+document.addEventListener('DOMContentLoaded', () => {
+    loadProducts();
+    setupSearch();
+});
+
+// Make functions global
+window.addToCart = addToCart;
+window.removeFromCart = removeFromCart;
+window.updateQuantity = updateQuantity;
+window.openCart = openCart;
+window.closeCart = closeCart;
+window.checkout = checkout;
+window.placeOrder = placeOrder;
+window.closeCheckout = closeCheckout;
+window.filterProducts = filterProducts;
+window.toggleAuth = toggleAuth;
+window.loginWithGoogle = loginWithGoogle;
+window.loginWithEmail = loginWithEmail;
+window.openLogin = openLogin;
+window.closeLogin = closeLogin;
+window.showHome = showHome;
+window.showShop = showShop;
+window.showOrders = showOrders;
+window.showProfile = showProfile;
+</script>
+</body>
+</html>
